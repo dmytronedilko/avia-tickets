@@ -134,16 +134,16 @@ const TOPICS: { title: string; icon: React.ReactNode; faqs: Faq[] }[] = [
     icon: ICONS.refresh,
     faqs: [
       {
-        q: "Can I change my flight?",
-        a: "Flight changes depend on the airline's fare rules. Open your booking and the available options will be shown. Some fares are non-changeable.",
+        q: "How do I cancel a ticket?",
+        a: "Open your account page, find the ticket, and click “Cancel ticket”. The booking is marked cancelled right away.",
       },
       {
         q: "How do refunds work?",
-        a: "We refund whatever the airline approves to your travel balance, with no service fee on our side. Processing takes up to 10 business days.",
+        a: "When you cancel a confirmed ticket, the full amount you paid is refunded to your travel balance instantly — there is no service fee.",
       },
       {
-        q: "My flight was cancelled by the airline. What now?",
-        a: "You are entitled to a rebooking or a full refund, depending on the airline's policy and applicable law. Reach out to support and we will arrange it.",
+        q: "Can I cancel a round-trip booking?",
+        a: "Yes. Cancelling a round trip releases the seats on both legs and refunds the full amount to your travel balance.",
       },
     ],
   },
@@ -170,8 +170,8 @@ const TOPICS: { title: string; icon: React.ReactNode; faqs: Faq[] }[] = [
     icon: ICONS.shield,
     faqs: [
       {
-        q: "I forgot my password.",
-        a: "Use the “Forgot password?” link on the sign-in dialog and we’ll email you a reset link.",
+        q: "How do I change my password?",
+        a: "Open your account page and use the “Change password” form — enter your current password and the new one. If you can’t sign in at all, contact support to recover access.",
       },
       {
         q: "How do I delete my account?",
