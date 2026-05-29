@@ -1,0 +1,12 @@
+{
+  "name": "avia-tickets",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Monorepo root — git hook tooling only. Backend and frontend have their own package.json.",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7"
+  }
+}

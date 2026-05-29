@@ -1,0 +1,18 @@
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+
+run_checks() {
+  dir="$1"
+  echo "$staged" | grep -q "^$dir/" || return 0
+
+  echo "--- $dir: prettier ---"
+  (cd "$dir" && npm run format:check)
+  echo "--- $dir: eslint ---"
+  (cd "$dir" && npm run lint)
+  echo "--- $dir: vitest ---"
+  (cd "$dir" && npm run test)
+}
+
+set -e
+run_checks backend
+run_checks frontend
+echo "Pre-commit checks passed."
