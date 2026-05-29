@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  UnauthorizedException,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { AuthService } from './auth.service';
 import type { DrizzleDB } from '../db/drizzle.provider';
@@ -157,5 +162,79 @@ describe('AuthService.login', () => {
     await expect(
       service.login({ email: 'user@example.com', password: 'wrong-password' }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+});
+
+describe('AuthService.changePassword', () => {
+  function makeDb(rows: unknown[]) {
+    const updateWhere = vi.fn().mockResolvedValue(undefined);
+    const setSpy = vi.fn().mockReturnValue({ where: updateWhere });
+    const db = {
+      select: vi.fn().mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue(rows),
+        }),
+      }),
+      update: vi.fn().mockReturnValue({ set: setSpy }),
+    };
+    return { db, setSpy };
+  }
+
+  it('throws NotFound when the user is missing', async () => {
+    const { db } = makeDb([]);
+    const service = new AuthService(
+      db as unknown as DrizzleDB,
+      makeJwt() as unknown as JwtService,
+    );
+
+    await expect(
+      service.changePassword(1, 'current', 'newsecret'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('rejects an incorrect current password', async () => {
+    const passwordHash = bcrypt.hashSync('correct-current', 10);
+    const { db } = makeDb([{ id: 1, passwordHash }]);
+    const service = new AuthService(
+      db as unknown as DrizzleDB,
+      makeJwt() as unknown as JwtService,
+    );
+
+    await expect(
+      service.changePassword(1, 'wrong-current', 'newsecret'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('rejects when the new password equals the current one', async () => {
+    const passwordHash = bcrypt.hashSync('samepass', 10);
+    const { db } = makeDb([{ id: 1, passwordHash }]);
+    const service = new AuthService(
+      db as unknown as DrizzleDB,
+      makeJwt() as unknown as JwtService,
+    );
+
+    await expect(
+      service.changePassword(1, 'samepass', 'samepass'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('stores a fresh hash of the new password', async () => {
+    const passwordHash = bcrypt.hashSync('old-password', 10);
+    const { db, setSpy } = makeDb([{ id: 1, passwordHash }]);
+    const service = new AuthService(
+      db as unknown as DrizzleDB,
+      makeJwt() as unknown as JwtService,
+    );
+
+    const result = await service.changePassword(
+      1,
+      'old-password',
+      'new-password',
+    );
+
+    expect(result).toEqual({ success: true });
+    const stored = setSpy.mock.calls[0][0] as { passwordHash: string };
+    expect(stored.passwordHash).not.toBe('new-password');
+    expect(bcrypt.compareSync('new-password', stored.passwordHash)).toBe(true);
   });
 });

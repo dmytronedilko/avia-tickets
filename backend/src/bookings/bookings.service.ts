@@ -139,6 +139,63 @@ export class BookingsService {
     });
   }
 
+  async cancelBooking(userId: number, bookingId: number) {
+    return this.db.transaction(async (tx) => {
+      const [booking] = await tx
+        .select()
+        .from(schema.bookings)
+        .where(
+          and(
+            eq(schema.bookings.id, bookingId),
+            eq(schema.bookings.userId, userId),
+          ),
+        );
+
+      if (!booking) {
+        throw new NotFoundException('Booking not found');
+      }
+      if (booking.status === 'cancelled') {
+        throw new BadRequestException('Booking is already cancelled');
+      }
+
+      const restoreSeats = async (flightId: number) => {
+        await tx
+          .update(schema.flights)
+          .set({
+            availableSeats: sql`${schema.flights.availableSeats} + ${booking.passengers}`,
+          })
+          .where(eq(schema.flights.id, flightId));
+      };
+
+      await restoreSeats(booking.flightId);
+      if (booking.returnFlightId) {
+        await restoreSeats(booking.returnFlightId);
+      }
+
+      const refundStr = Number(booking.pricePaid).toFixed(2);
+      const [updatedUser] = await tx
+        .update(schema.users)
+        .set({
+          balance: sql`${schema.users.balance} + ${refundStr}`,
+        })
+        .where(eq(schema.users.id, userId))
+        .returning();
+
+      const [updatedBooking] = await tx
+        .update(schema.bookings)
+        .set({ status: 'cancelled' })
+        .where(eq(schema.bookings.id, bookingId))
+        .returning();
+
+      return {
+        id: updatedBooking.id,
+        status: updatedBooking.status,
+        refund: Number(booking.pricePaid),
+        balance: Number(updatedUser.balance),
+      };
+    });
+  }
+
   async listForUser(userId: number) {
     const rows = await this.db.query.bookings.findMany({
       where: eq(schema.bookings.userId, userId),

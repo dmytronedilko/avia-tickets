@@ -42,6 +42,13 @@ export interface MyBooking {
   returnFlight: Flight | null;
 }
 
+export interface CancelBookingResult {
+  id: number;
+  status: string;
+  refund: number;
+  balance: number;
+}
+
 export type FlightSort = "best" | "cheapest" | "fastest" | "earliest";
 
 export interface SearchParams {

@@ -3,6 +3,8 @@ import {
   Inject,
   ConflictException,
   UnauthorizedException,
+  BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
@@ -78,6 +80,45 @@ export class AuthService {
     }
 
     return this.buildResult(user);
+  }
+
+  async changePassword(
+    userId: number,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ success: true }> {
+    const [user] = await this.db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.id, userId));
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    if (!user.passwordHash) {
+      throw new BadRequestException(
+        'This account has no password set. Use a different sign-in method.',
+      );
+    }
+
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    if (await bcrypt.compare(newPassword, user.passwordHash)) {
+      throw new BadRequestException(
+        'New password must differ from the current one',
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    await this.db
+      .update(schema.users)
+      .set({ passwordHash })
+      .where(eq(schema.users.id, userId));
+
+    return { success: true };
   }
 
   private buildResult(user: typeof schema.users.$inferSelect): AuthResult {

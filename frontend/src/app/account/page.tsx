@@ -4,10 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
-import { apiGet, apiPost, AuthExpiredError } from "@/lib/api";
+import { apiGet, apiPost, apiPatch, AuthExpiredError } from "@/lib/api";
 import SiteHeader from "@/components/SiteHeader";
 import Toast from "@/components/Toast";
-import type { AuthUser, MyBooking } from "@/types";
+import type { AuthUser, MyBooking, CancelBookingResult } from "@/types";
 import { formatDateTime, formatDuration } from "@/lib/format";
 
 const TOPUP_OPTIONS = [100, 500, 1000];
@@ -27,7 +27,12 @@ export default function AccountPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [topUpBusy, setTopUpBusy] = useState<number | null>(null);
+  const [cancelBusy, setCancelBusy] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [pwBusy, setPwBusy] = useState(false);
+  const [pwError, setPwError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isReady && !user) {
@@ -95,6 +100,68 @@ export default function AccountPage() {
       setError(e instanceof Error ? e.message : "Top-up failed");
     } finally {
       setTopUpBusy(null);
+    }
+  };
+
+  const handleCancel = async (bookingId: number) => {
+    if (!token) return;
+    if (
+      !window.confirm(
+        "Cancel this ticket? The amount paid will be refunded to your balance.",
+      )
+    ) {
+      return;
+    }
+    setCancelBusy(bookingId);
+    setError(null);
+    try {
+      const result = await apiPatch<CancelBookingResult>(
+        `/api/bookings/${bookingId}/cancel`,
+        {},
+        { token, authRequired: true },
+      );
+      updateBalance(result.balance);
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.id === bookingId ? { ...b, status: result.status } : b,
+        ),
+      );
+      setToast(`Ticket cancelled. $${result.refund.toFixed(2)} refunded.`);
+    } catch (e) {
+      if (e instanceof AuthExpiredError) {
+        logout();
+        return;
+      }
+      setError(e instanceof Error ? e.message : "Cancellation failed");
+    } finally {
+      setCancelBusy(null);
+    }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    setPwBusy(true);
+    setPwError(null);
+    try {
+      await apiPost(
+        "/api/auth/change-password",
+        { currentPassword, newPassword },
+        { token, authRequired: true },
+      );
+      setCurrentPassword("");
+      setNewPassword("");
+      setToast("Password updated.");
+    } catch (err) {
+      if (err instanceof AuthExpiredError) {
+        logout();
+        return;
+      }
+      setPwError(
+        err instanceof Error ? err.message : "Could not change password",
+      );
+    } finally {
+      setPwBusy(false);
     }
   };
 
@@ -189,6 +256,47 @@ export default function AccountPage() {
               >
                 Sign out
               </button>
+            </div>
+
+            <div className="mt-6 rounded-3xl bg-white p-6 shadow-soft ring-1 ring-ink-100">
+              <div className="text-xs font-semibold uppercase tracking-wider text-ink-400">
+                Change password
+              </div>
+              <p className="mt-1 text-sm text-ink-500">
+                Enter your current password to set a new one.
+              </p>
+              <form onSubmit={handleChangePassword} className="mt-4 grid gap-3">
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  placeholder="Current password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="w-full rounded-xl border border-ink-100 px-3 py-2.5 text-sm text-ink-900 outline-none transition focus:border-ember-300 focus:ring-2 focus:ring-ember-100"
+                />
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  minLength={6}
+                  maxLength={72}
+                  placeholder="New password (min 6 characters)"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full rounded-xl border border-ink-100 px-3 py-2.5 text-sm text-ink-900 outline-none transition focus:border-ember-300 focus:ring-2 focus:ring-ember-100"
+                />
+                {pwError && (
+                  <p className="text-sm font-medium text-red-600">{pwError}</p>
+                )}
+                <button
+                  type="submit"
+                  disabled={pwBusy || !currentPassword || !newPassword}
+                  className="w-full rounded-xl bg-ink-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-ink-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {pwBusy ? "Updating…" : "Update password"}
+                </button>
+              </form>
             </div>
           </div>
 
@@ -299,6 +407,18 @@ export default function AccountPage() {
                         <div className="font-display text-2xl font-bold text-ink-900">
                           ${b.pricePaid.toFixed(2)}
                         </div>
+                        {b.status === "confirmed" && (
+                          <button
+                            type="button"
+                            disabled={cancelBusy === b.id}
+                            onClick={() => handleCancel(b.id)}
+                            className="mt-2 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-wait disabled:opacity-60"
+                          >
+                            {cancelBusy === b.id
+                              ? "Cancelling…"
+                              : "Cancel ticket"}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </article>
@@ -311,7 +431,7 @@ export default function AccountPage() {
 
       {toast && (
         <Toast
-          title="Top-up successful"
+          title="Success"
           message={toast}
           duration={4000}
           onDismiss={() => setToast(null)}

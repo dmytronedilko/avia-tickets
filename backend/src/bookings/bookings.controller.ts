@@ -1,4 +1,13 @@
-import { Controller, Post, Body, Get, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Patch,
+  Body,
+  Get,
+  Param,
+  ParseIntPipe,
+  UseGuards,
+} from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -25,5 +34,13 @@ export class BookingsController {
   @Get('me')
   listMine(@CurrentUser() user: AuthedUser) {
     return this.bookingsService.listForUser(user.id);
+  }
+
+  @Patch(':id/cancel')
+  cancel(
+    @CurrentUser() user: AuthedUser,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.bookingsService.cancelBooking(user.id, id);
   }
 }

@@ -86,9 +86,10 @@ export default function AuthModal({
           <div className="absolute inset-0 bg-grid-pattern bg-[size:40px_40px] opacity-10" />
 
           <button
+            type="button"
             onClick={onClose}
             aria-label="Close"
-            className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20 hover:text-white"
+            className="absolute right-4 top-4 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20 hover:text-white"
           >
             <svg
               className="h-4 w-4"

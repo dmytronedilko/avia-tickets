@@ -46,13 +46,14 @@ export async function apiGet<T>(
   return (await res.json()) as T;
 }
 
-export async function apiPost<T>(
+async function apiSend<T>(
+  method: "POST" | "PATCH",
   path: string,
   body: unknown,
-  opts: ApiOptions = {},
+  opts: ApiOptions,
 ): Promise<T> {
   const res = await fetch(path, {
-    method: "POST",
+    method,
     headers: {
       "Content-Type": "application/json",
       ...authHeader(opts.token),
@@ -63,4 +64,20 @@ export async function apiPost<T>(
   if (opts.authRequired && res.status === 401) throw new AuthExpiredError();
   if (!res.ok) throw new Error(await parseErrorMessage(res));
   return (await res.json()) as T;
+}
+
+export function apiPost<T>(
+  path: string,
+  body: unknown,
+  opts: ApiOptions = {},
+): Promise<T> {
+  return apiSend<T>("POST", path, body, opts);
+}
+
+export function apiPatch<T>(
+  path: string,
+  body: unknown,
+  opts: ApiOptions = {},
+): Promise<T> {
+  return apiSend<T>("PATCH", path, body, opts);
 }

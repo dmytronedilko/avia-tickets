@@ -7,20 +7,36 @@ function makeTx() {
   const selectWhere = vi.fn();
   const updateReturning = vi.fn();
   const insertReturning = vi.fn();
+  // For cancelBooking: some updates (seat restore) don't call .returning().
+  const updateWhere = vi.fn(() => ({ returning: updateReturning }));
   const tx = {
     select: vi.fn(() => ({
       from: vi.fn(() => ({ where: selectWhere })),
     })),
     update: vi.fn(() => ({
       set: vi.fn(() => ({
-        where: vi.fn(() => ({ returning: updateReturning })),
+        where: updateWhere,
       })),
     })),
     insert: vi.fn(() => ({
       values: vi.fn(() => ({ returning: insertReturning })),
     })),
   };
-  return { tx, selectWhere, updateReturning, insertReturning };
+  return { tx, selectWhere, updateReturning, insertReturning, updateWhere };
+}
+
+function booking(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 99,
+    userId: 1,
+    flightId: 10,
+    returnFlightId: null,
+    passengers: 1,
+    bookingTime: new Date(),
+    status: 'confirmed',
+    pricePaid: '224.00',
+    ...overrides,
+  };
 }
 
 function makeService(tx: unknown) {
@@ -183,5 +199,61 @@ describe('BookingsService.createBooking', () => {
     expect(result.balance).toBe(720);
     expect(result.returnFlight).not.toBeNull();
     expect(result.returnFlight?.price).toBe(150);
+  });
+});
+
+describe('BookingsService.cancelBooking', () => {
+  it('throws NotFound when the booking does not belong to the user', async () => {
+    const { tx, selectWhere } = makeTx();
+    selectWhere.mockResolvedValueOnce([]);
+    const { service } = makeService(tx);
+
+    await expect(service.cancelBooking(1, 99)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('rejects a booking that is already cancelled', async () => {
+    const { tx, selectWhere } = makeTx();
+    selectWhere.mockResolvedValueOnce([booking({ status: 'cancelled' })]);
+    const { service } = makeService(tx);
+
+    await expect(service.cancelBooking(1, 99)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('refunds the fare and marks the booking cancelled', async () => {
+    const { tx, selectWhere, updateReturning } = makeTx();
+    selectWhere.mockResolvedValueOnce([booking({ pricePaid: '224.00' })]);
+    updateReturning
+      .mockResolvedValueOnce([{ ...user, balance: '1224.00' }])
+      .mockResolvedValueOnce([booking({ status: 'cancelled' })]);
+    const { service } = makeService(tx);
+
+    const result = await service.cancelBooking(1, 99);
+
+    expect(result.status).toBe('cancelled');
+    expect(result.refund).toBe(224);
+    expect(result.balance).toBe(1224);
+  });
+
+  it('restores seats on both legs of a round trip', async () => {
+    const { tx, selectWhere, updateReturning } = makeTx();
+    selectWhere.mockResolvedValueOnce([
+      booking({ returnFlightId: 20, passengers: 2, pricePaid: '560.00' }),
+    ]);
+    updateReturning
+      .mockResolvedValueOnce([{ ...user, balance: '1560.00' }])
+      .mockResolvedValueOnce([
+        booking({ returnFlightId: 20, status: 'cancelled' }),
+      ]);
+    const { service } = makeService(tx);
+
+    const result = await service.cancelBooking(1, 99);
+
+    // outbound restore + return restore = 2 seat updates, then balance + status.
+    expect(tx.update).toHaveBeenCalledTimes(4);
+    expect(result.refund).toBe(560);
   });
 });
