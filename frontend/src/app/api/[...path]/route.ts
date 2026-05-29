@@ -44,3 +44,18 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
   const { path } = await ctx.params;
   return proxy(req, path);
 }
+
+export async function PATCH(req: NextRequest, ctx: Ctx): Promise<Response> {
+  const { path } = await ctx.params;
+  return proxy(req, path);
+}
+
+export async function PUT(req: NextRequest, ctx: Ctx): Promise<Response> {
+  const { path } = await ctx.params;
+  return proxy(req, path);
+}
+
+export async function DELETE(req: NextRequest, ctx: Ctx): Promise<Response> {
+  const { path } = await ctx.params;
+  return proxy(req, path);
+}
